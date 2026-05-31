@@ -6,7 +6,7 @@ from datetime import datetime
 from app.database import get_db
 from app.models.usuario import Usuario
 from app.models.empresa import Empresa
-from app.auth.jwt import crear_token
+from app.auth.jwt import crear_token, get_current_user
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -160,4 +160,42 @@ def crear_comprador(
         "usuario_id": usuario.id,
         "email": usuario.email,
         "rol": usuario.rol
+    }
+
+@router.post("/invitar-comprador")
+def invitar_comprador(
+    nombre: str,
+    email: str,
+    pais: str,
+    empresa_compradora: str,
+    empresa_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    if current_user["rol"] != "gerente":
+        raise HTTPException(status_code=403, detail="Solo el gerente puede invitar compradores")
+
+    if db.query(Usuario).filter(Usuario.email == email).first():
+        raise HTTPException(status_code=400, detail="Este email ya está registrado en el sistema")
+
+    password_temporal = f"AgroScan2025!"
+
+    usuario = Usuario(
+        nombre=nombre,
+        email=email,
+        password_hash=hashear_password(password_temporal),
+        rol="comprador_extranjero",
+        empresa_id=empresa_id
+    )
+    db.add(usuario)
+    db.commit()
+    db.refresh(usuario)
+
+    return {
+        "mensaje": f"Comprador {nombre} registrado exitosamente",
+        "usuario_id": usuario.id,
+        "email": email,
+        "password_temporal": password_temporal,
+        "rol": "comprador_extranjero",
+        "instrucciones": "Comparte estas credenciales con el comprador para que acceda al portal de trazabilidad"
     }

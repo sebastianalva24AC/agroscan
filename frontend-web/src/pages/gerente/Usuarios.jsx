@@ -7,12 +7,20 @@ export default function Usuarios() {
   const [modal, setModal] = useState(null)
   const [campos, setCampos] = useState([])
   const [guardando, setGuardando] = useState(false)
-  const [formTecnico, setFormTecnico] = useState({ nombre: '', email: '', password: '', empresa_id: '' })
+  const [resultado, setResultado] = useState(null)
+  const [formTecnico, setFormTecnico] = useState({
+    nombre: '', email: '', password: '', empresa_id: ''
+  })
+  const [formComprador, setFormComprador] = useState({
+    nombre: '', email: '', pais: '', empresa_compradora: '', empresa_id: ''
+  })
 
   useEffect(() => {
     camposService.listar().then(r => setCampos(r.data)).catch(console.error)
     const usuario = JSON.parse(localStorage.getItem('usuario') || '{}')
-    setFormTecnico(f => ({ ...f, empresa_id: usuario.empresa_id || '' }))
+    const eid = usuario.empresa_id || ''
+    setFormTecnico(f => ({ ...f, empresa_id: eid }))
+    setFormComprador(f => ({ ...f, empresa_id: eid }))
   }, [])
 
   const crearTecnico = async (e) => {
@@ -20,14 +28,44 @@ export default function Usuarios() {
     setGuardando(true)
     try {
       await authService.crearTecnico(formTecnico)
-      alert(`Técnico ${formTecnico.nombre} creado exitosamente. Credenciales enviadas a ${formTecnico.email}`)
-      setModal(null)
+      setResultado({
+        tipo: 'tecnico',
+        email: formTecnico.email,
+        password: formTecnico.password,
+        nombre: formTecnico.nombre
+      })
+      setModal('resultado_tecnico')
       setFormTecnico({ nombre: '', email: '', password: '', empresa_id: formTecnico.empresa_id })
     } catch {
       alert('Error al crear el técnico. El email puede estar en uso.')
     } finally {
       setGuardando(false)
     }
+  }
+
+  const invitarComprador = async (e) => {
+    e.preventDefault()
+    setGuardando(true)
+    try {
+      const res = await authService.invitarComprador(formComprador)
+      setResultado(res.data)
+      setModal('resultado_comprador')
+      setFormComprador({ nombre: '', email: '', pais: '', empresa_compradora: '', empresa_id: formComprador.empresa_id })
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Error al registrar el comprador')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const inputStyle = {
+    width: '100%', padding: '10px 14px',
+    border: '1.5px solid #E0E0E0', borderRadius: '8px',
+    fontSize: '14px', outline: 'none'
+  }
+  const labelStyle = {
+    display: 'block', fontSize: '13px',
+    fontWeight: '500', marginBottom: '6px', color: '#424242'
   }
 
   return (
@@ -91,7 +129,7 @@ export default function Usuarios() {
             <p style={{ fontSize: '13px', color: '#424242', lineHeight: '1.6' }}>
               <strong>Acceso:</strong> Solo plataforma web<br />
               <strong>Funciones:</strong> Ver estado de campos del proveedor, consultar certificados QR, revisar historial de lotes<br />
-              <strong>Invitación:</strong> El gerente ingresa su email y recibe un enlace
+              <strong>Registro:</strong> El gerente ingresa sus datos y el sistema genera sus credenciales
             </p>
           </div>
           <button onClick={() => setModal('comprador')} style={{
@@ -99,12 +137,12 @@ export default function Usuarios() {
             border: '1.5px solid #BBDEFB', borderRadius: '8px', cursor: 'pointer',
             fontSize: '14px', fontWeight: '600'
           }}>
-            Invitar comprador
+            Registrar comprador
           </button>
         </div>
       </div>
 
-      {/* Info adicional */}
+      {/* Flujo de acceso */}
       <div style={{ background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
         <h2 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px', color: '#1A1A2E' }}>
           Flujo de acceso al sistema
@@ -112,8 +150,8 @@ export default function Usuarios() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
           {[
             { paso: '1', titulo: 'Gerente se registra', desc: 'Crea su cuenta y empresa desde la web. Es el administrador principal.', color: '#1B5E20' },
-            { paso: '2', titulo: 'Crea cuenta del técnico', desc: 'Desde esta sección, el gerente crea las credenciales del técnico agrónomo.', color: '#E65100' },
-            { paso: '3', titulo: 'Técnico inicia sesión', desc: 'Usa las credenciales en la app móvil para trabajar en el campo.', color: '#1565C0' },
+            { paso: '2', titulo: 'Crea cuenta del técnico', desc: 'Desde esta sección crea las credenciales. El técnico las usa en la app móvil.', color: '#E65100' },
+            { paso: '3', titulo: 'Registra al comprador', desc: 'Ingresa los datos del comprador y le comparte las credenciales generadas.', color: '#1565C0' },
           ].map(item => (
             <div key={item.paso} style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
               <div style={{
@@ -121,9 +159,7 @@ export default function Usuarios() {
                 background: item.color, color: 'white',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '14px', fontWeight: '700', flexShrink: 0
-              }}>
-                {item.paso}
-              </div>
+              }}>{item.paso}</div>
               <div>
                 <p style={{ fontSize: '14px', fontWeight: '600', color: '#1A1A2E' }}>{item.titulo}</p>
                 <p style={{ fontSize: '13px', color: '#757575', marginTop: '4px', lineHeight: '1.5' }}>{item.desc}</p>
@@ -138,27 +174,18 @@ export default function Usuarios() {
         <Modal titulo="Crear técnico agrónomo" onClose={() => setModal(null)}>
           <form onSubmit={crearTecnico}>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '6px', color: '#424242' }}>
-                Nombre completo
-              </label>
-              <input style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E0E0E0', borderRadius: '8px', fontSize: '14px', outline: 'none' }}
-                placeholder="Ej: Luis Torres García"
+              <label style={labelStyle}>Nombre completo</label>
+              <input style={inputStyle} placeholder="Ej: Luis Torres García"
                 value={formTecnico.nombre} onChange={e => setFormTecnico({ ...formTecnico, nombre: e.target.value })} required />
             </div>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '6px', color: '#424242' }}>
-                Email
-              </label>
-              <input style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E0E0E0', borderRadius: '8px', fontSize: '14px', outline: 'none' }}
-                type="email" placeholder="tecnico@empresa.com"
+              <label style={labelStyle}>Email</label>
+              <input style={inputStyle} type="email" placeholder="tecnico@empresa.com"
                 value={formTecnico.email} onChange={e => setFormTecnico({ ...formTecnico, email: e.target.value })} required />
             </div>
             <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '6px', color: '#424242' }}>
-                Contraseña temporal
-              </label>
-              <input style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E0E0E0', borderRadius: '8px', fontSize: '14px', outline: 'none' }}
-                type="password" placeholder="Mínimo 8 caracteres"
+              <label style={labelStyle}>Contraseña temporal</label>
+              <input style={inputStyle} type="password" placeholder="Mínimo 8 caracteres"
                 value={formTecnico.password} onChange={e => setFormTecnico({ ...formTecnico, password: e.target.value })} required minLength={8} />
               <p style={{ fontSize: '12px', color: '#9E9E9E', marginTop: '4px' }}>
                 El técnico usará estas credenciales para ingresar a la app móvil
@@ -178,22 +205,121 @@ export default function Usuarios() {
         </Modal>
       )}
 
-      {/* Modal invitar comprador */}
+      {/* Modal registrar comprador */}
       {modal === 'comprador' && (
-        <Modal titulo="Invitar comprador extranjero" onClose={() => setModal(null)}>
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <Icon name="users" size={48} color="#E0E0E0" />
-            <p style={{ color: '#9E9E9E', marginTop: '16px', fontSize: '14px' }}>
-              La funcionalidad de invitación por email estará disponible próximamente.
+        <Modal titulo="Registrar comprador extranjero" onClose={() => setModal(null)}>
+          <form onSubmit={invitarComprador}>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={labelStyle}>Nombre completo</label>
+              <input style={inputStyle} placeholder="Ej: Johan Van Der Berg"
+                value={formComprador.nombre} onChange={e => setFormComprador({ ...formComprador, nombre: e.target.value })} required />
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={labelStyle}>Email</label>
+              <input style={inputStyle} type="email" placeholder="comprador@empresa.com"
+                value={formComprador.email} onChange={e => setFormComprador({ ...formComprador, email: e.target.value })} required />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <label style={labelStyle}>País</label>
+                <input style={inputStyle} placeholder="Países Bajos"
+                  value={formComprador.pais} onChange={e => setFormComprador({ ...formComprador, pais: e.target.value })} required />
+              </div>
+              <div>
+                <label style={labelStyle}>Empresa compradora</label>
+                <input style={inputStyle} placeholder="Dutch Fresh Imports"
+                  value={formComprador.empresa_compradora} onChange={e => setFormComprador({ ...formComprador, empresa_compradora: e.target.value })} required />
+              </div>
+            </div>
+            <div style={{ background: '#E3F2FD', borderRadius: '8px', padding: '12px', marginBottom: '24px' }}>
+              <p style={{ fontSize: '13px', color: '#1565C0' }}>
+                El sistema generará automáticamente las credenciales de acceso para el comprador.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => setModal(null)} style={{
+                background: 'white', color: '#1565C0', border: '1.5px solid #1565C0',
+                borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontSize: '14px', fontWeight: '600'
+              }}>Cancelar</button>
+              <button type="submit" disabled={guardando} style={{
+                background: '#1565C0', color: 'white', border: 'none',
+                borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontSize: '14px', fontWeight: '600'
+              }}>{guardando ? 'Registrando...' : 'Registrar comprador'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal resultado técnico */}
+      {modal === 'resultado_tecnico' && resultado && (
+        <Modal titulo="Técnico creado exitosamente" onClose={() => setModal(null)}>
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <Icon name="check" size={40} color="#1B5E20" />
+            <p style={{ fontSize: '15px', fontWeight: '600', color: '#1B5E20', marginTop: '8px' }}>
+              {resultado.nombre} ha sido registrado
             </p>
-            <p style={{ color: '#BDBDBD', fontSize: '13px', marginTop: '8px' }}>
-              Por ahora el comprador puede ver los certificados QR sin necesidad de cuenta.
-            </p>
-            <button onClick={() => setModal(null)} style={{
-              marginTop: '20px', background: '#1B5E20', color: 'white', border: 'none',
-              borderRadius: '8px', padding: '10px 24px', cursor: 'pointer', fontSize: '14px', fontWeight: '600'
-            }}>Entendido</button>
           </div>
+          <div style={{ background: '#F8F9FA', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+            <p style={{ fontSize: '12px', color: '#9E9E9E', fontWeight: '600', textTransform: 'uppercase', marginBottom: '8px' }}>
+              Credenciales para la app móvil
+            </p>
+            <p style={{ fontSize: '14px', marginBottom: '4px' }}>
+              <strong>Email:</strong> {resultado.email}
+            </p>
+            <p style={{ fontSize: '14px' }}>
+              <strong>Contraseña:</strong> {resultado.password}
+            </p>
+          </div>
+          <div style={{ background: '#FFF8E1', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
+            <p style={{ fontSize: '13px', color: '#F57F17' }}>
+              Comparte estas credenciales con el técnico para que pueda ingresar a la app móvil.
+            </p>
+          </div>
+          <button onClick={() => setModal(null)} style={{
+            width: '100%', padding: '12px', background: '#1B5E20',
+            color: 'white', border: 'none', borderRadius: '8px',
+            cursor: 'pointer', fontSize: '14px', fontWeight: '600'
+          }}>
+            Entendido
+          </button>
+        </Modal>
+      )}
+
+      {/* Modal resultado comprador */}
+      {modal === 'resultado_comprador' && resultado && (
+        <Modal titulo="Comprador registrado exitosamente" onClose={() => setModal(null)}>
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <Icon name="check" size={40} color="#1565C0" />
+            <p style={{ fontSize: '15px', fontWeight: '600', color: '#1565C0', marginTop: '8px' }}>
+              {resultado.mensaje}
+            </p>
+          </div>
+          <div style={{ background: '#F8F9FA', borderRadius: '8px', padding: '16px', marginBottom: '16px' }}>
+            <p style={{ fontSize: '12px', color: '#9E9E9E', fontWeight: '600', textTransform: 'uppercase', marginBottom: '8px' }}>
+              Credenciales para el portal web
+            </p>
+            <p style={{ fontSize: '14px', marginBottom: '4px' }}>
+              <strong>Email:</strong> {resultado.email}
+            </p>
+            <p style={{ fontSize: '14px', marginBottom: '4px' }}>
+              <strong>Contraseña temporal:</strong> {resultado.password_temporal}
+            </p>
+            <p style={{ fontSize: '14px' }}>
+              <strong>Portal:</strong> http://localhost:5173/login
+            </p>
+          </div>
+          <div style={{ background: '#E3F2FD', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
+            <p style={{ fontSize: '13px', color: '#1565C0' }}>
+              {resultado.instrucciones}
+            </p>
+          </div>
+          <button onClick={() => setModal(null)} style={{
+            width: '100%', padding: '12px', background: '#1565C0',
+            color: 'white', border: 'none', borderRadius: '8px',
+            cursor: 'pointer', fontSize: '14px', fontWeight: '600'
+          }}>
+            Entendido
+          </button>
         </Modal>
       )}
     </div>

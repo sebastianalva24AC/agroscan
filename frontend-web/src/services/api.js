@@ -4,16 +4,12 @@ const API_URL = 'http://127.0.0.1:8000'
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  headers: { 'Content-Type': 'application/json' }
 })
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
@@ -37,7 +33,8 @@ export const authService = {
     return axios.post(`${API_URL}/api/auth/login`, formData)
   },
   registroEmpresa: (datos) => api.post('/api/auth/registro-empresa', null, { params: datos }),
-  crearTecnico: (datos) => api.post('/api/auth/crear-tecnico', null, { params: datos })
+  crearTecnico: (datos) => api.post('/api/auth/crear-tecnico', null, { params: datos }),
+  invitarComprador: (datos) => api.post('/api/auth/invitar-comprador', null, { params: datos })
 }
 
 export const camposService = {
