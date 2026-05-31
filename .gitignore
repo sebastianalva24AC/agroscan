@@ -1,0 +1,20 @@
+# Variables de entorno - NO subir
+backend/.env
+
+# Python
+backend/venv/
+backend/__pycache__/
+backend/app/__pycache__/
+backend/**/__pycache__/
+*.pyc
+
+# Node
+frontend-web/node_modules/
+mobile/node_modules/
+
+# Uploads generados
+backend/uploads/
+
+# Sistema
+.DS_Store
+Thumbs.db
