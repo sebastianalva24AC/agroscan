@@ -73,4 +73,4 @@ def root():
         "mensaje": "AgroScan API funcionando correctamente",
         "version": "1.0.0",
         "docs": "/docs"
-    }
+    }   

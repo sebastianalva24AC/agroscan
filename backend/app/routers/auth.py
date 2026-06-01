@@ -199,3 +199,40 @@ def invitar_comprador(
         "rol": "comprador_extranjero",
         "instrucciones": "Comparte estas credenciales con el comprador para que acceda al portal de trazabilidad"
     }
+
+@router.get("/tecnicos")
+def listar_tecnicos(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    if current_user["rol"] != "gerente":
+        raise HTTPException(status_code=403, detail="Solo el gerente puede ver los técnicos")
+    
+    tecnicos = db.query(Usuario).filter(
+        Usuario.rol == "tecnico_agronomo",
+        Usuario.empresa_id == current_user["empresa_id"]
+    ).all()
+    
+    return {
+        "tecnicos": [
+            {
+                "id": t.id,
+                "nombre": t.nombre,
+                "email": t.email,
+                "ultima_actividad": str(t.ultima_actividad) if hasattr(t, 'ultima_actividad') and t.ultima_actividad else None
+            }
+            for t in tecnicos
+        ]
+    }
+
+@router.post("/registrar-actividad")
+def registrar_actividad(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    usuario = db.query(Usuario).filter(Usuario.id == current_user["id"]).first()
+    if usuario:
+        from datetime import datetime
+        usuario.ultima_actividad = datetime.now()
+        db.commit()
+    return {"mensaje": "Actividad registrada"}

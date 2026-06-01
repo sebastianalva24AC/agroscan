@@ -1,8 +1,81 @@
 import { useState, useEffect } from 'react'
 import { authService, camposService } from '../../services/api'
+import api from '../../services/api'
 import Icon from '../../components/Icon'
 import Modal from '../../components/Modal'
 
+// ─── LISTA DE TÉCNICOS ────────────────────────────────────────
+function ListaTecnicos() {
+  const [tecnicos, setTecnicos] = useState([])
+  const [cargando, setCargando] = useState(true)
+
+  useEffect(() => {
+    api.get('/api/auth/tecnicos')
+      .then(r => setTecnicos(r.data.tecnicos || []))
+      .catch(console.error)
+      .finally(() => setCargando(false))
+  }, [])
+
+  const estaEnLinea = (ultimaActividad) => {
+    if (!ultimaActividad) return false
+    const diff = new Date() - new Date(ultimaActividad)
+    return diff < 15 * 60 * 1000
+  }
+
+  if (cargando) return null
+
+  return (
+    <div style={{ background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginTop: '24px' }}>
+      <h2 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px', color: '#1A1A2E' }}>
+        Técnicos registrados
+      </h2>
+      {tecnicos.length === 0 ? (
+        <p style={{ color: '#9E9E9E', fontSize: '13px' }}>No hay técnicos registrados aún</p>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#F8F9FA' }}>
+              {['Nombre', 'Email', 'Estado', 'Última actividad'].map(h => (
+                <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', fontWeight: '600', color: '#757575', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tecnicos.map(t => (
+              <tr key={t.id} style={{ borderBottom: '1px solid #F0F0F0' }}>
+                <td style={{ padding: '14px 16px', fontWeight: '500' }}>{t.nombre}</td>
+                <td style={{ padding: '14px 16px', color: '#757575' }}>{t.email}</td>
+                <td style={{ padding: '14px 16px' }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                    background: estaEnLinea(t.ultima_actividad) ? '#E8F5E9' : '#F5F5F5',
+                    color: estaEnLinea(t.ultima_actividad) ? '#1B5E20' : '#9E9E9E',
+                    padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600'
+                  }}>
+                    <span style={{
+                      width: '6px', height: '6px', borderRadius: '50%',
+                      background: estaEnLinea(t.ultima_actividad) ? '#4CAF50' : '#BDBDBD'
+                    }} />
+                    {estaEnLinea(t.ultima_actividad) ? 'En línea' : 'Desconectado'}
+                  </span>
+                </td>
+                <td style={{ padding: '14px 16px', fontSize: '13px', color: '#9E9E9E' }}>
+                  {t.ultima_actividad
+                    ? new Date(t.ultima_actividad).toLocaleString('es-PE')
+                    : 'Sin actividad registrada'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
+// ─── GESTIÓN DE USUARIOS ──────────────────────────────────────
 export default function Usuarios() {
   const [modal, setModal] = useState(null)
   const [campos, setCampos] = useState([])
@@ -87,7 +160,6 @@ export default function Usuarios() {
         </button>
       </div>
 
-      {/* Tarjetas de roles */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
         <div style={{ background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: '4px solid #1B5E20' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
@@ -142,7 +214,6 @@ export default function Usuarios() {
         </div>
       </div>
 
-      {/* Flujo de acceso */}
       <div style={{ background: 'white', borderRadius: '12px', padding: '24px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
         <h2 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px', color: '#1A1A2E' }}>
           Flujo de acceso al sistema
@@ -168,6 +239,9 @@ export default function Usuarios() {
           ))}
         </div>
       </div>
+
+      {/* Lista de técnicos registrados */}
+      <ListaTecnicos />
 
       {/* Modal crear técnico */}
       {modal === 'tecnico' && (
@@ -250,7 +324,6 @@ export default function Usuarios() {
         </Modal>
       )}
 
-      {/* Modal resultado técnico */}
       {modal === 'resultado_tecnico' && resultado && (
         <Modal titulo="Técnico creado exitosamente" onClose={() => setModal(null)}>
           <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -263,12 +336,8 @@ export default function Usuarios() {
             <p style={{ fontSize: '12px', color: '#9E9E9E', fontWeight: '600', textTransform: 'uppercase', marginBottom: '8px' }}>
               Credenciales para la app móvil
             </p>
-            <p style={{ fontSize: '14px', marginBottom: '4px' }}>
-              <strong>Email:</strong> {resultado.email}
-            </p>
-            <p style={{ fontSize: '14px' }}>
-              <strong>Contraseña:</strong> {resultado.password}
-            </p>
+            <p style={{ fontSize: '14px', marginBottom: '4px' }}><strong>Email:</strong> {resultado.email}</p>
+            <p style={{ fontSize: '14px' }}><strong>Contraseña:</strong> {resultado.password}</p>
           </div>
           <div style={{ background: '#FFF8E1', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
             <p style={{ fontSize: '13px', color: '#F57F17' }}>
@@ -279,13 +348,10 @@ export default function Usuarios() {
             width: '100%', padding: '12px', background: '#1B5E20',
             color: 'white', border: 'none', borderRadius: '8px',
             cursor: 'pointer', fontSize: '14px', fontWeight: '600'
-          }}>
-            Entendido
-          </button>
+          }}>Entendido</button>
         </Modal>
       )}
 
-      {/* Modal resultado comprador */}
       {modal === 'resultado_comprador' && resultado && (
         <Modal titulo="Comprador registrado exitosamente" onClose={() => setModal(null)}>
           <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -298,28 +364,18 @@ export default function Usuarios() {
             <p style={{ fontSize: '12px', color: '#9E9E9E', fontWeight: '600', textTransform: 'uppercase', marginBottom: '8px' }}>
               Credenciales para el portal web
             </p>
-            <p style={{ fontSize: '14px', marginBottom: '4px' }}>
-              <strong>Email:</strong> {resultado.email}
-            </p>
-            <p style={{ fontSize: '14px', marginBottom: '4px' }}>
-              <strong>Contraseña temporal:</strong> {resultado.password_temporal}
-            </p>
-            <p style={{ fontSize: '14px' }}>
-              <strong>Portal:</strong> http://localhost:5173/login
-            </p>
+            <p style={{ fontSize: '14px', marginBottom: '4px' }}><strong>Email:</strong> {resultado.email}</p>
+            <p style={{ fontSize: '14px', marginBottom: '4px' }}><strong>Contraseña temporal:</strong> {resultado.password_temporal}</p>
+            <p style={{ fontSize: '14px' }}><strong>Portal:</strong> http://localhost:5173/login</p>
           </div>
           <div style={{ background: '#E3F2FD', borderRadius: '8px', padding: '12px', marginBottom: '20px' }}>
-            <p style={{ fontSize: '13px', color: '#1565C0' }}>
-              {resultado.instrucciones}
-            </p>
+            <p style={{ fontSize: '13px', color: '#1565C0' }}>{resultado.instrucciones}</p>
           </div>
           <button onClick={() => setModal(null)} style={{
             width: '100%', padding: '12px', background: '#1565C0',
             color: 'white', border: 'none', borderRadius: '8px',
             cursor: 'pointer', fontSize: '14px', fontWeight: '600'
-          }}>
-            Entendido
-          </button>
+          }}>Entendido</button>
         </Modal>
       )}
     </div>
