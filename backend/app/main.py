@@ -13,10 +13,11 @@ import app.models.certificado
 import app.models.alerta
 import app.models.comprador
 import app.models.acceso_comprador
-
+from apscheduler.schedulers.background import BackgroundScheduler
+from app.services.alertas_automaticas import verificar_alertas_climaticas, verificar_alertas_ndvi
 from app.routers import (
     auth, campos, cultivos, clima,
-    alertas, diagnostico, lotes, certificados
+    alertas, diagnostico, lotes, certificados, satelital
 )
 
 Base.metadata.create_all(bind=engine)
@@ -43,6 +44,28 @@ app.include_router(alertas.router, prefix="/api/alertas", tags=["Alertas"])
 app.include_router(diagnostico.router, prefix="/api/diagnostico", tags=["Diagnóstico IA"])
 app.include_router(lotes.router, prefix="/api/lotes", tags=["Lotes"])
 app.include_router(certificados.router, prefix="/api/certificados", tags=["Certificados QR"])
+app.include_router(satelital.router, prefix="/api/satelital", tags=["Satelital NDVI"])
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(
+    verificar_alertas_climaticas,
+    'interval',
+    hours=1,
+    id='alertas_climaticas',
+    replace_existing=True
+)
+scheduler.add_job(
+    verificar_alertas_ndvi,
+    'interval',
+    hours=8,
+    id='alertas_ndvi',
+    replace_existing=True
+)
+scheduler.start()
+
+@app.on_event("shutdown")
+def shutdown_scheduler():
+    scheduler.shutdown()
 
 @app.get("/")
 def root():

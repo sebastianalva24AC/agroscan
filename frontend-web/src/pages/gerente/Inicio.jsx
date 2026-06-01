@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { camposService, alertasService } from '../../services/api'
 import Icon from '../../components/Icon'
+import api from '../../services/api'
 
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -12,6 +13,108 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
+
+function PanelNDVI({ campoId, nombreCampo }) {
+  const [ndvi, setNdvi] = useState(null)
+  const [cargando, setCargando] = useState(true)
+
+  useEffect(() => {
+    if (!campoId) return
+    api.get(`/api/satelital/${campoId}/ndvi`)
+      .then(r => setNdvi(r.data))
+      .catch(console.error)
+      .finally(() => setCargando(false))
+  }, [campoId])
+
+  const getColorNDVI = (valor) => {
+    if (valor >= 0.6) return { color: '#1B5E20', bg: '#E8F5E9', label: 'Muy saludable' }
+    if (valor >= 0.4) return { color: '#558B2F', bg: '#F1F8E9', label: 'Saludable' }
+    if (valor >= 0.2) return { color: '#F57F17', bg: '#FFF8E1', label: 'Estado regular' }
+    return { color: '#C62828', bg: '#FFEBEE', label: 'Requiere atención' }
+  }
+
+  if (cargando) return (
+    <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: '20px' }}>
+      <p style={{ color: '#9E9E9E', fontSize: '13px' }}>Consultando datos satelitales NASA...</p>
+    </div>
+  )
+
+  if (!ndvi) return null
+
+if (ndvi.estado === 'sin_datos') return (
+  <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: '20px' }}>
+    <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#1A1A2E', marginBottom: '8px' }}>
+      Índice de Vegetación NDVI — {nombreCampo}
+    </h2>
+    <p style={{ fontSize: '13px', color: '#9E9E9E' }}>
+      Procesando datos satelitales desde NASA POWER API. Los datos estarán disponibles en unos momentos.
+    </p>
+  </div>
+)
+
+  const colores = getColorNDVI(ndvi.ndvi_promedio)
+
+  return (
+    <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div>
+          <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#1A1A2E' }}>
+            Índice de Vegetación NDVI — {nombreCampo}
+          </h2>
+          <p style={{ fontSize: '12px', color: '#9E9E9E', marginTop: '2px' }}>
+            Fuente: {ndvi.fuente} · Actualizado: {new Date(ndvi.fecha).toLocaleString('es-PE')}
+          </p>
+        </div>
+        <span style={{
+          background: colores.bg, color: colores.color,
+          padding: '4px 12px', borderRadius: '20px',
+          fontSize: '12px', fontWeight: '600'
+        }}>
+          {colores.label}
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+        {[
+          { label: 'NDVI Promedio', value: ndvi.ndvi_promedio, suffix: '', main: true },
+          { label: 'Vegetación saludable', value: `${ndvi.porcentaje_saludable}%`, suffix: '', main: false },
+          { label: 'En observación', value: `${ndvi.porcentaje_observacion}%`, suffix: '', main: false },
+          { label: 'Requiere atención', value: `${ndvi.porcentaje_riesgo}%`, suffix: '', main: false },
+        ].map(item => (
+          <div key={item.label} style={{
+            background: item.main ? colores.bg : '#F8F9FA',
+            borderRadius: '8px', padding: '14px',
+            borderLeft: item.main ? `3px solid ${colores.color}` : 'none'
+          }}>
+            <p style={{ fontSize: '11px', color: '#9E9E9E', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '6px' }}>
+              {item.label}
+            </p>
+            <p style={{ fontSize: '22px', fontWeight: '700', color: item.main ? colores.color : '#424242' }}>
+              {item.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+          <span style={{ fontSize: '12px', color: '#9E9E9E' }}>Estado general del campo</span>
+          <span style={{ fontSize: '12px', fontWeight: '600', color: colores.color }}>
+            {Math.round(ndvi.ndvi_promedio * 100)}%
+          </span>
+        </div>
+        <div style={{ height: '8px', background: '#F0F0F0', borderRadius: '4px', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', borderRadius: '4px',
+            background: `linear-gradient(90deg, #C62828, #F57F17, #1B5E20)`,
+            width: `${ndvi.ndvi_promedio * 100}%`,
+            transition: 'width 1s ease'
+          }} />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Inicio({ usuario }) {
   const [campos, setCampos] = useState([])
@@ -195,6 +298,11 @@ export default function Inicio({ usuario }) {
           </div>
         </div>
       </div>
+
+      {/* Panel NDVI */}
+      {campoSel && (
+        <PanelNDVI campoId={campoSel.id} nombreCampo={campoSel.nombre} />
+      )}
 
       {/* Accesos rápidos */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
