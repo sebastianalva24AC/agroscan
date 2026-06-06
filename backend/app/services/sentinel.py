@@ -80,7 +80,7 @@ def get_ndvi_nasa_fallback(latitud: float, longitud: float) -> dict:
         fecha_inicio = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
         url = "https://power.larc.nasa.gov/api/temporal/daily/point"
         params = {
-            'parameters': 'ALLSKY_SFC_SW_DWN',
+            'parameters': 'ALLSKY_SFC_SW_DWNexit',
             'community': 'AG',
             'longitude': longitud,
             'latitude': latitud,
