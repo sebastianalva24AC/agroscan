@@ -16,12 +16,23 @@ L.Icon.Default.mergeOptions({
 
 function PanelNDVI({ campoId, nombreCampo }) {
   const [ndvi, setNdvi] = useState(null)
+  const [historial, setHistorial] = useState([])
   const [cargando, setCargando] = useState(true)
 
   useEffect(() => {
     if (!campoId) return
-    api.get(`/api/satelital/${campoId}/ndvi`)
-      .then(r => setNdvi(r.data))
+    Promise.all([
+      api.get(`/api/satelital/${campoId}/ndvi`),
+      api.get(`/api/satelital/${campoId}/historial`)
+    ])
+      .then(([rNdvi, rHist]) => {
+        setNdvi(rNdvi.data)
+        const registros = rHist.data.imagenes || []
+        setHistorial(registros.slice(0, 8).reverse().map((r) => ({
+          fecha: new Date(r.fecha_captura).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }),
+          ndvi: parseFloat(r.ndvi_promedio || 0).toFixed(3)
+        })))
+      })
       .catch(console.error)
       .finally(() => setCargando(false))
   }, [campoId])
@@ -35,22 +46,22 @@ function PanelNDVI({ campoId, nombreCampo }) {
 
   if (cargando) return (
     <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: '20px' }}>
-      <p style={{ color: '#9E9E9E', fontSize: '13px' }}>Consultando datos satelitales NASA...</p>
+      <p style={{ color: '#9E9E9E', fontSize: '13px' }}>Consultando datos satelitales...</p>
     </div>
   )
 
   if (!ndvi) return null
 
-if (ndvi.estado === 'sin_datos') return (
-  <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: '20px' }}>
-    <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#1A1A2E', marginBottom: '8px' }}>
-      Índice de Vegetación NDVI — {nombreCampo}
-    </h2>
-    <p style={{ fontSize: '13px', color: '#9E9E9E' }}>
-      Procesando datos satelitales desde NASA POWER API. Los datos estarán disponibles en unos momentos.
-    </p>
-  </div>
-)
+  if (ndvi.estado === 'sin_datos') return (
+    <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: '20px' }}>
+      <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#1A1A2E', marginBottom: '8px' }}>
+        Índice de Vegetación NDVI — {nombreCampo}
+      </h2>
+      <p style={{ fontSize: '13px', color: '#9E9E9E' }}>
+        Procesando datos satelitales. Los datos estarán disponibles en unos momentos.
+      </p>
+    </div>
+  )
 
   const colores = getColorNDVI(ndvi.ndvi_promedio)
 
@@ -65,27 +76,19 @@ if (ndvi.estado === 'sin_datos') return (
             Fuente: {ndvi.fuente} · Actualizado: {new Date(ndvi.fecha).toLocaleString('es-PE')}
           </p>
         </div>
-        <span style={{
-          background: colores.bg, color: colores.color,
-          padding: '4px 12px', borderRadius: '20px',
-          fontSize: '12px', fontWeight: '600'
-        }}>
+        <span style={{ background: colores.bg, color: colores.color, padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
           {colores.label}
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
         {[
-          { label: 'NDVI Promedio', value: ndvi.ndvi_promedio, suffix: '', main: true },
-          { label: 'Vegetación saludable', value: `${ndvi.porcentaje_saludable}%`, suffix: '', main: false },
-          { label: 'En observación', value: `${ndvi.porcentaje_observacion}%`, suffix: '', main: false },
-          { label: 'Requiere atención', value: `${ndvi.porcentaje_riesgo}%`, suffix: '', main: false },
+          { label: 'NDVI Promedio', value: ndvi.ndvi_promedio, main: true },
+          { label: 'Vegetación saludable', value: `${ndvi.porcentaje_saludable}%`, main: false },
+          { label: 'En observación', value: `${ndvi.porcentaje_observacion}%`, main: false },
+          { label: 'Requiere atención', value: `${ndvi.porcentaje_riesgo}%`, main: false },
         ].map(item => (
-          <div key={item.label} style={{
-            background: item.main ? colores.bg : '#F8F9FA',
-            borderRadius: '8px', padding: '14px',
-            borderLeft: item.main ? `3px solid ${colores.color}` : 'none'
-          }}>
+          <div key={item.label} style={{ background: item.main ? colores.bg : '#F8F9FA', borderRadius: '8px', padding: '14px', borderLeft: item.main ? `3px solid ${colores.color}` : 'none' }}>
             <p style={{ fontSize: '11px', color: '#9E9E9E', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: '6px' }}>
               {item.label}
             </p>
@@ -96,22 +99,40 @@ if (ndvi.estado === 'sin_datos') return (
         ))}
       </div>
 
-      <div style={{ marginTop: '12px' }}>
+      <div style={{ marginBottom: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
           <span style={{ fontSize: '12px', color: '#9E9E9E' }}>Estado general del campo</span>
-          <span style={{ fontSize: '12px', fontWeight: '600', color: colores.color }}>
-            {Math.round(ndvi.ndvi_promedio * 100)}%
-          </span>
+          <span style={{ fontSize: '12px', fontWeight: '600', color: colores.color }}>{Math.round(ndvi.ndvi_promedio * 100)}%</span>
         </div>
         <div style={{ height: '8px', background: '#F0F0F0', borderRadius: '4px', overflow: 'hidden' }}>
-          <div style={{
-            height: '100%', borderRadius: '4px',
-            background: `linear-gradient(90deg, #C62828, #F57F17, #1B5E20)`,
-            width: `${ndvi.ndvi_promedio * 100}%`,
-            transition: 'width 1s ease'
-          }} />
+          <div style={{ height: '100%', borderRadius: '4px', background: `linear-gradient(90deg, #C62828, #F57F17, #1B5E20)`, width: `${ndvi.ndvi_promedio * 100}%`, transition: 'width 1s ease' }} />
         </div>
       </div>
+
+      {historial.length > 1 && (
+        <div>
+          <p style={{ fontSize: '13px', fontWeight: '600', color: '#424242', marginBottom: '12px' }}>
+            📈 Evolución histórica del NDVI
+          </p>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '80px' }}>
+            {historial.map((h, i) => {
+              const altura = Math.max(10, parseFloat(h.ndvi) * 100)
+              const c = getColorNDVI(parseFloat(h.ndvi))
+              const esUltimo = i === historial.length - 1
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '10px', color: c.color, fontWeight: esUltimo ? '700' : '400' }}>{h.ndvi}</span>
+                  <div style={{ width: '100%', height: `${altura}%`, background: esUltimo ? colores.color : c.color, borderRadius: '4px 4px 0 0', opacity: esUltimo ? 1 : 0.5, minHeight: '8px' }} />
+                  <span style={{ fontSize: '9px', color: '#9E9E9E', textAlign: 'center', lineHeight: 1.2 }}>{h.fecha}</span>
+                </div>
+              )
+            })}
+          </div>
+          <p style={{ fontSize: '11px', color: '#BDBDBD', marginTop: '8px', textAlign: 'center' }}>
+            Últimas {historial.length} mediciones — La barra más oscura es la más reciente
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -144,22 +165,16 @@ export default function Inicio({ usuario }) {
 
   return (
     <div>
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#1A1A2E' }}>
-            Bienvenido, {usuario?.nombre}
-          </h1>
-          <p style={{ fontSize: '14px', color: '#9E9E9E', marginTop: '4px' }}>
-            Resumen general de tus operaciones agrícolas
-          </p>
+          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#1A1A2E' }}>Bienvenido, {usuario?.nombre}</h1>
+          <p style={{ fontSize: '14px', color: '#9E9E9E', marginTop: '4px' }}>Resumen general de tus operaciones agrícolas</p>
         </div>
         <span style={{ fontSize: '13px', color: '#BDBDBD' }}>
           {new Date().toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </span>
       </div>
 
-      {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
         {[
           { label: 'Campos activos', value: campos.length, sub: 'registrados', color: '#1B5E20' },
@@ -167,25 +182,15 @@ export default function Inicio({ usuario }) {
           { label: 'Sistema', value: 'Operativo', sub: 'Todos los módulos activos', color: '#1565C0', texto: true },
           { label: 'Fecha de hoy', value: new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }), sub: 'Actualizado ahora', color: '#6A1B9A', texto: true },
         ].map(s => (
-          <div key={s.label} style={{
-            background: 'white', borderRadius: '12px', padding: '20px 24px',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: `4px solid ${s.color}`
-          }}>
-            <p style={{ fontSize: '12px', color: '#9E9E9E', marginBottom: '8px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-              {s.label}
-            </p>
-            <p style={{ fontSize: s.texto ? '18px' : '30px', fontWeight: '700', color: s.color, lineHeight: 1 }}>
-              {s.value}
-            </p>
+          <div key={s.label} style={{ background: 'white', borderRadius: '12px', padding: '20px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: `4px solid ${s.color}` }}>
+            <p style={{ fontSize: '12px', color: '#9E9E9E', marginBottom: '8px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{s.label}</p>
+            <p style={{ fontSize: s.texto ? '18px' : '30px', fontWeight: '700', color: s.color, lineHeight: 1 }}>{s.value}</p>
             <p style={{ fontSize: '12px', color: '#BDBDBD', marginTop: '6px' }}>{s.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Mapa + Panel */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px', marginBottom: '20px' }}>
-
-        {/* Mapa satelital */}
         <div style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #F0F0F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
@@ -212,10 +217,7 @@ export default function Inicio({ usuario }) {
             </div>
           ) : (
             <MapContainer center={pos} zoom={13} style={{ height: '360px' }} key={campoSel?.id}>
-              <TileLayer
-                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                attribution="Imagery © Esri"
-              />
+              <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="Imagery © Esri" />
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" opacity={0.15} />
               {campos.map(c => (
                 <Marker key={c.id} position={[parseFloat(c.latitud), parseFloat(c.longitud)]}>
@@ -226,11 +228,7 @@ export default function Inicio({ usuario }) {
                 </Marker>
               ))}
               {campoSel && (
-                <Circle
-                  center={[parseFloat(campoSel.latitud), parseFloat(campoSel.longitud)]}
-                  radius={600}
-                  pathOptions={{ color: '#4CAF50', fillColor: '#4CAF50', fillOpacity: 0.12 }}
-                />
+                <Circle center={[parseFloat(campoSel.latitud), parseFloat(campoSel.longitud)]} radius={600} pathOptions={{ color: '#4CAF50', fillColor: '#4CAF50', fillOpacity: 0.12 }} />
               )}
             </MapContainer>
           )}
@@ -245,9 +243,7 @@ export default function Inicio({ usuario }) {
           )}
         </div>
 
-        {/* Panel lateral */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Campos */}
           <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: '600' }}>Campos activos</h3>
@@ -256,25 +252,16 @@ export default function Inicio({ usuario }) {
             {campos.length === 0 ? (
               <p style={{ fontSize: '13px', color: '#9E9E9E', textAlign: 'center', padding: '12px 0' }}>Sin campos registrados</p>
             ) : campos.slice(0, 4).map(c => (
-              <div key={c.id} onClick={() => setCampoSel(c)} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '10px 12px', borderRadius: '8px', cursor: 'pointer', marginBottom: '4px',
-                background: campoSel?.id === c.id ? '#F1F8E9' : 'transparent',
-                border: `1px solid ${campoSel?.id === c.id ? '#C8E6C9' : 'transparent'}`,
-                transition: 'all 0.15s'
-              }}>
+              <div key={c.id} onClick={() => setCampoSel(c)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: '8px', cursor: 'pointer', marginBottom: '4px', background: campoSel?.id === c.id ? '#F1F8E9' : 'transparent', border: `1px solid ${campoSel?.id === c.id ? '#C8E6C9' : 'transparent'}`, transition: 'all 0.15s' }}>
                 <div>
                   <p style={{ fontSize: '13px', fontWeight: '500' }}>{c.nombre}</p>
                   <p style={{ fontSize: '11px', color: '#9E9E9E', marginTop: '2px' }}>{c.region} · {c.hectareas} ha</p>
                 </div>
-                <span style={{ background: '#E8F5E9', color: '#1B5E20', padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>
-                  {c.zona}
-                </span>
+                <span style={{ background: '#E8F5E9', color: '#1B5E20', padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>{c.zona}</span>
               </div>
             ))}
           </div>
 
-          {/* Alertas */}
           <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: '600' }}>Alertas recientes</h3>
@@ -286,11 +273,7 @@ export default function Inicio({ usuario }) {
                 <p style={{ fontSize: '13px', marginTop: '8px' }}>Sin alertas pendientes</p>
               </div>
             ) : alertas.slice(0, 3).map(a => (
-              <div key={a.id} style={{
-                padding: '10px 12px', borderRadius: '8px', marginBottom: '6px',
-                background: a.nivel === 'critico' ? '#FFEBEE' : a.nivel === 'advertencia' ? '#FFFDE7' : '#E3F2FD',
-                borderLeft: `3px solid ${a.nivel === 'critico' ? '#C62828' : a.nivel === 'advertencia' ? '#F9A825' : '#1565C0'}`
-              }}>
+              <div key={a.id} style={{ padding: '10px 12px', borderRadius: '8px', marginBottom: '6px', background: a.nivel === 'critico' ? '#FFEBEE' : a.nivel === 'advertencia' ? '#FFFDE7' : '#E3F2FD', borderLeft: `3px solid ${a.nivel === 'critico' ? '#C62828' : a.nivel === 'advertencia' ? '#F9A825' : '#1565C0'}` }}>
                 <p style={{ fontSize: '12px', fontWeight: '500' }}>{a.descripcion}</p>
                 <p style={{ fontSize: '11px', color: '#9E9E9E', marginTop: '2px' }}>{a.tipo}</p>
               </div>
@@ -299,12 +282,10 @@ export default function Inicio({ usuario }) {
         </div>
       </div>
 
-      {/* Panel NDVI */}
       {campoSel && (
         <PanelNDVI campoId={campoSel.id} nombreCampo={campoSel.nombre} />
       )}
 
-      {/* Accesos rápidos */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
         {[
           { path: '/gerente/campos', label: 'Gestionar campos', desc: 'Registra y edita campos', icon: 'map', bg: '#E8F5E9', iconColor: '#1B5E20' },
@@ -313,12 +294,7 @@ export default function Inicio({ usuario }) {
           { path: '/gerente/trazabilidad', label: 'Trazabilidad', desc: 'Lotes y certificados QR', icon: 'qr', bg: '#F3E5F5', iconColor: '#6A1B9A' },
         ].map(item => (
           <Link key={item.path} to={item.path} style={{ textDecoration: 'none' }}>
-            <div style={{
-              background: 'white', borderRadius: '12px', padding: '16px',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.07)', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '14px',
-              transition: 'box-shadow 0.2s, transform 0.2s'
-            }}
+            <div style={{ background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '14px', transition: 'box-shadow 0.2s, transform 0.2s' }}
               onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
               onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.07)'; e.currentTarget.style.transform = 'translateY(0)' }}
             >
