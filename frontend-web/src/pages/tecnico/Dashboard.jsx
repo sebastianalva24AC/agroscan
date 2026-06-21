@@ -2,7 +2,17 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { camposService, cultivosService, climaService, alertasService, diagnosticoService } from '../../services/api'
+import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
+import L from 'leaflet'
 import Icon from '../../components/Icon'
+
+delete L.Icon.Default.prototype._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+})
 
 export default function DashboardTecnico() {
   const { usuario, logout } = useAuth()
@@ -59,6 +69,11 @@ export default function DashboardTecnico() {
     otro: { bg: '#F5F5F5', color: '#424242', label: 'Otro' },
   }
 
+  const campoPrincipal = campos.length > 0 ? campos[0] : null
+  const posicion = campoPrincipal
+    ? [parseFloat(campoPrincipal.latitud), parseFloat(campoPrincipal.longitud)]
+    : [-9.19, -75.015]
+
   return (
     <div style={{ minHeight: '100vh', background: '#F8F9FA' }}>
 
@@ -73,20 +88,14 @@ export default function DashboardTecnico() {
             width: '32px', height: '32px', background: '#2E7D32',
             borderRadius: '8px', display: 'flex', alignItems: 'center',
             justifyContent: 'center', fontSize: '16px'
-          }}>
-            🌿
-          </div>
+          }}>🌿</div>
           <div>
             <span style={{ color: 'white', fontSize: '16px', fontWeight: '700' }}>AgroScan</span>
-            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', marginLeft: '8px' }}>
-              Portal del Técnico
-            </span>
+            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', marginLeft: '8px' }}>Portal del Técnico</span>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px' }}>
-            {usuario?.nombre}
-          </span>
+          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px' }}>{usuario?.nombre}</span>
           <button onClick={handleLogout} style={{
             background: 'rgba(255,255,255,0.1)', color: 'white',
             border: '1px solid rgba(255,255,255,0.2)',
@@ -99,7 +108,7 @@ export default function DashboardTecnico() {
         </div>
       </header>
 
-      {/* Navegación de vistas */}
+      {/* Tabs */}
       <div style={{ background: 'white', borderBottom: '1px solid #F0F0F0', padding: '0 32px' }}>
         <div style={{ display: 'flex', gap: '4px' }}>
           {[
@@ -125,9 +134,7 @@ export default function DashboardTecnico() {
 
       <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 24px' }}>
         {cargando ? (
-          <p style={{ textAlign: 'center', padding: '80px', color: '#9E9E9E' }}>
-            Cargando información...
-          </p>
+          <p style={{ textAlign: 'center', padding: '80px', color: '#9E9E9E' }}>Cargando información...</p>
         ) : (
           <>
             {/* Vista: Mi campo */}
@@ -160,6 +167,55 @@ export default function DashboardTecnico() {
                     </div>
                   ))}
                 </div>
+
+                {/* Mapa satelital del campo */}
+                {campoPrincipal && (
+                  <div style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: '20px' }}>
+                    <div style={{ padding: '16px 20px', borderBottom: '1px solid #F0F0F0' }}>
+                      <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#1A1A2E' }}>
+                        📍 Ubicación del campo — {campoPrincipal.nombre}
+                      </h2>
+                      <p style={{ fontSize: '12px', color: '#9E9E9E', marginTop: '2px' }}>
+                        Vista satelital en tiempo real · {campoPrincipal.region} · {campoPrincipal.hectareas} ha
+                      </p>
+                    </div>
+                    <MapContainer
+                      center={posicion}
+                      zoom={14}
+                      style={{ height: '300px' }}
+                      key={campoPrincipal.id}
+                    >
+                      <TileLayer
+                        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                        attribution="Imagery © Esri"
+                      />
+                      <TileLayer
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        opacity={0.15}
+                      />
+                      <Marker position={posicion}>
+                        <Popup>
+                          <strong>{campoPrincipal.nombre}</strong><br />
+                          <span style={{ fontSize: '12px', color: '#757575' }}>
+                            {campoPrincipal.region} — {campoPrincipal.zona}<br />
+                            {campoPrincipal.hectareas} ha
+                          </span>
+                        </Popup>
+                      </Marker>
+                      <Circle
+                        center={posicion}
+                        radius={500}
+                        pathOptions={{ color: '#4CAF50', fillColor: '#4CAF50', fillOpacity: 0.1 }}
+                      />
+                    </MapContainer>
+                    <div style={{ padding: '10px 20px', background: '#F8F9FA', borderTop: '1px solid #F0F0F0', display: 'flex', gap: '20px', fontSize: '12px', color: '#757575' }}>
+                      <span><strong style={{ color: '#424242' }}>Campo:</strong> {campoPrincipal.nombre}</span>
+                      <span><strong style={{ color: '#424242' }}>Región:</strong> {campoPrincipal.region}</span>
+                      <span><strong style={{ color: '#424242' }}>Zona:</strong> {campoPrincipal.zona}</span>
+                      <span><strong style={{ color: '#424242' }}>Superficie:</strong> {campoPrincipal.hectareas} ha</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Lista de campos */}
                 <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', marginBottom: '20px' }}>
@@ -276,7 +332,7 @@ export default function DashboardTecnico() {
               </div>
             )}
 
-            {/* Vista: Historial de registros */}
+            {/* Vista: Historial */}
             {vista === 'historial' && (
               <div>
                 <div style={{ marginBottom: '24px' }}>
