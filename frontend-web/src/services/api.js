@@ -39,7 +39,7 @@ export const authService = {
 
 export const camposService = {
   listar: () => api.get('/api/campos/'),
-  crear: (datos) => api.post('/api/campos/', null, { params: datos }),
+  crear: (datos) => api.post('/api/campos/', datos),
   obtener: (id) => api.get(`/api/campos/${id}`),
   actualizar: (id, datos) => api.put(`/api/campos/${id}`, null, { params: datos })
 }
