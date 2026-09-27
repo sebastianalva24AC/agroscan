@@ -4,89 +4,99 @@ from app.models.campo import Campo
 from app.models.alerta import Alerta
 from app.services.openweather import get_clima_actual
 
-# Umbrales de alerta para cultivos de exportación
 UMBRALES = {
     'temperatura_max': 32.0,
     'temperatura_min': 8.0,
     'humedad_min': 40.0,
     'humedad_max': 95.0,
     'viento_max': 15.0,
-    'precipitacion_max': 20.0
+    'precipitacion_max': 20.0,
+    # Umbrales específicos Fenómeno del Niño
+    'temperatura_nino': 35.0,
+    'precipitacion_nino': 50.0,
+    'humedad_nino': 98.0,
 }
+
+def _crear_alerta_si_no_existe(db, campo_id, tipo, descripcion, nivel):
+    existente = db.query(Alerta).filter(
+        Alerta.campo_id == campo_id,
+        Alerta.tipo == tipo,
+        Alerta.descripcion == descripcion,
+        Alerta.resuelta == False
+    ).first()
+    if not existente:
+        db.add(Alerta(
+            tipo=tipo,
+            descripcion=descripcion,
+            nivel=nivel,
+            campo_id=campo_id
+        ))
 
 def verificar_alertas_climaticas():
     db: Session = SessionLocal()
     try:
         campos = db.query(Campo).filter(Campo.activo == True).all()
         for campo in campos:
-            clima = get_clima_actual(
-                float(campo.latitud),
-                float(campo.longitud)
-            )
+            clima = get_clima_actual(float(campo.latitud), float(campo.longitud))
             if not clima:
                 continue
 
-            alertas_nuevas = []
+            temp = clima['temperatura']
+            hum = clima['humedad']
+            viento = clima['viento']
+            precip = clima['precipitacion']
 
-            if clima['temperatura'] > UMBRALES['temperatura_max']:
-                alertas_nuevas.append({
-                    'tipo': 'clima',
-                    'descripcion': f"Temperatura crítica: {clima['temperatura']}°C supera el umbral de {UMBRALES['temperatura_max']}°C en {campo.nombre}. Activar sistema de riego de emergencia.",
-                    'nivel': 'critico'
-                })
-            elif clima['temperatura'] < UMBRALES['temperatura_min']:
-                alertas_nuevas.append({
-                    'tipo': 'clima',
-                    'descripcion': f"Temperatura baja: {clima['temperatura']}°C por debajo del umbral de {UMBRALES['temperatura_min']}°C en {campo.nombre}. Riesgo de helada.",
-                    'nivel': 'critico'
-                })
+            # Alertas Fenómeno del Niño — prioridad máxima
+            if temp >= UMBRALES['temperatura_nino']:
+                _crear_alerta_si_no_existe(db, campo.id, 'fenomeno_nino',
+                    f"⚠️ ALERTA FENÓMENO DEL NIÑO: Temperatura anómala de {temp}°C en {campo.nombre}. "
+                    f"Supera el umbral crítico de {UMBRALES['temperatura_nino']}°C. "
+                    f"Activar protocolos de emergencia: riego nocturno, mallas de sombreo y monitoreo intensivo.",
+                    'critico')
 
-            if clima['humedad'] > UMBRALES['humedad_max']:
-                alertas_nuevas.append({
-                    'tipo': 'clima',
-                    'descripcion': f"Humedad excesiva: {clima['humedad']}% en {campo.nombre}. Riesgo de enfermedades fúngicas como botrytis.",
-                    'nivel': 'advertencia'
-                })
-            elif clima['humedad'] < UMBRALES['humedad_min']:
-                alertas_nuevas.append({
-                    'tipo': 'clima',
-                    'descripcion': f"Humedad baja: {clima['humedad']}% en {campo.nombre}. Verificar sistema de riego.",
-                    'nivel': 'advertencia'
-                })
+            if precip >= UMBRALES['precipitacion_nino']:
+                _crear_alerta_si_no_existe(db, campo.id, 'fenomeno_nino',
+                    f"⚠️ ALERTA FENÓMENO DEL NIÑO: Precipitación extrema de {precip} mm en {campo.nombre}. "
+                    f"Riesgo de inundación y pérdida de cultivos. Verificar drenajes y canaletas de emergencia.",
+                    'critico')
 
-            if clima['viento'] > UMBRALES['viento_max']:
-                alertas_nuevas.append({
-                    'tipo': 'clima',
-                    'descripcion': f"Viento fuerte: {clima['viento']} m/s en {campo.nombre}. Puede afectar la polinización y estructura de las plantas.",
-                    'nivel': 'advertencia'
-                })
+            if hum >= UMBRALES['humedad_nino']:
+                _crear_alerta_si_no_existe(db, campo.id, 'fenomeno_nino',
+                    f"⚠️ ALERTA FENÓMENO DEL NIÑO: Humedad extrema de {hum}% en {campo.nombre}. "
+                    f"Condiciones críticas para proliferación de hongos. Aplicar fungicida preventivo de inmediato.",
+                    'critico')
 
-            if clima['precipitacion'] > UMBRALES['precipitacion_max']:
-                alertas_nuevas.append({
-                    'tipo': 'clima',
-                    'descripcion': f"Precipitación intensa: {clima['precipitacion']} mm en {campo.nombre}. Revisar drenaje del campo.",
-                    'nivel': 'advertencia'
-                })
+            # Alertas climáticas estándar
+            if temp > UMBRALES['temperatura_max']:
+                _crear_alerta_si_no_existe(db, campo.id, 'clima',
+                    f"Temperatura crítica: {temp}°C supera {UMBRALES['temperatura_max']}°C en {campo.nombre}. Activar riego de emergencia.",
+                    'critico')
+            elif temp < UMBRALES['temperatura_min']:
+                _crear_alerta_si_no_existe(db, campo.id, 'clima',
+                    f"Temperatura baja: {temp}°C bajo el umbral de {UMBRALES['temperatura_min']}°C en {campo.nombre}. Riesgo de helada.",
+                    'critico')
 
-            for alerta_data in alertas_nuevas:
-                alerta_existente = db.query(Alerta).filter(
-                    Alerta.campo_id == campo.id,
-                    Alerta.tipo == alerta_data['tipo'],
-                    Alerta.descripcion == alerta_data['descripcion'],
-                    Alerta.resuelta == False
-                ).first()
+            if hum > UMBRALES['humedad_max']:
+                _crear_alerta_si_no_existe(db, campo.id, 'clima',
+                    f"Humedad excesiva: {hum}% en {campo.nombre}. Riesgo de enfermedades fúngicas como botrytis.",
+                    'advertencia')
+            elif hum < UMBRALES['humedad_min']:
+                _crear_alerta_si_no_existe(db, campo.id, 'clima',
+                    f"Humedad baja: {hum}% en {campo.nombre}. Verificar sistema de riego.",
+                    'advertencia')
 
-                if not alerta_existente:
-                    nueva_alerta = Alerta(
-                        tipo=alerta_data['tipo'],
-                        descripcion=alerta_data['descripcion'],
-                        nivel=alerta_data['nivel'],
-                        campo_id=campo.id
-                    )
-                    db.add(nueva_alerta)
+            if viento > UMBRALES['viento_max']:
+                _crear_alerta_si_no_existe(db, campo.id, 'clima',
+                    f"Viento fuerte: {viento} m/s en {campo.nombre}. Puede afectar polinización y estructura de plantas.",
+                    'advertencia')
+
+            if precip > UMBRALES['precipitacion_max']:
+                _crear_alerta_si_no_existe(db, campo.id, 'clima',
+                    f"Precipitación intensa: {precip} mm en {campo.nombre}. Revisar drenaje del campo.",
+                    'advertencia')
 
         db.commit()
-        print(f"Verificación de alertas climáticas completada para {len(campos)} campos")
+        print(f"Verificación climática completada para {len(campos)} campos")
 
     except Exception as e:
         print(f"Error en verificación de alertas: {e}")
@@ -99,54 +109,31 @@ def verificar_alertas_ndvi():
     try:
         from app.services.sentinel import get_ndvi_campo
         campos = db.query(Campo).filter(Campo.activo == True).all()
-        
+
         for campo in campos:
             ndvi_data = get_ndvi_campo(
                 float(campo.latitud),
                 float(campo.longitud),
                 campo.nombre
             )
-            
+
             if not ndvi_data or not ndvi_data.get('ndvi_promedio'):
                 continue
-                
+
             ndvi = ndvi_data['ndvi_promedio']
-            
-            alerta_data = None
-            
+
             if ndvi < 0.2:
-                alerta_data = {
-                    'tipo': 'satelital',
-                    'descripcion': f"NDVI crítico: {ndvi} en {campo.nombre}. El cultivo muestra signos severos de estrés. Inspección inmediata requerida.",
-                    'nivel': 'critico'
-                }
+                _crear_alerta_si_no_existe(db, campo.id, 'satelital',
+                    f"NDVI crítico: {ndvi} en {campo.nombre}. El cultivo muestra signos severos de estrés. Inspección inmediata requerida.",
+                    'critico')
             elif ndvi < 0.4:
-                alerta_data = {
-                    'tipo': 'satelital',
-                    'descripcion': f"NDVI bajo: {ndvi} en {campo.nombre}. El cultivo muestra estrés moderado. Se recomienda revisión del sistema de riego y fertilización.",
-                    'nivel': 'advertencia'
-                }
-            
-            if alerta_data:
-                alerta_existente = db.query(Alerta).filter(
-                    Alerta.campo_id == campo.id,
-                    Alerta.tipo == 'satelital',
-                    Alerta.resuelta == False
-                ).first()
-                
-                if not alerta_existente:
-                    nueva_alerta = Alerta(
-                        tipo=alerta_data['tipo'],
-                        descripcion=alerta_data['descripcion'],
-                        nivel=alerta_data['nivel'],
-                        campo_id=campo.id
-                    )
-                    db.add(nueva_alerta)
-                    db.commit()
-                    print(f"Alerta NDVI creada para campo {campo.nombre}: NDVI={ndvi}")
-        
+                _crear_alerta_si_no_existe(db, campo.id, 'satelital',
+                    f"NDVI bajo: {ndvi} en {campo.nombre}. El cultivo muestra estrés moderado. Revisar riego y fertilización.",
+                    'advertencia')
+
+        db.commit()
         print(f"Verificación NDVI completada para {len(campos)} campos")
-        
+
     except Exception as e:
         print(f"Error en verificación NDVI: {e}")
         db.rollback()
